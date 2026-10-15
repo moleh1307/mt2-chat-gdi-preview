@@ -1,0 +1,26 @@
+name: Normal Tahoma12 native GDI preview
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bake:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check source metric rules and export format
+        run: python test_baker.py
+      - name: Bake only normal Tahoma12 through native Windows GDI
+        run: python bake_chat_gdi.py --output out
+      - name: Retain only the generated glyph atlas and metadata
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: normal-tahoma12-native-gdi
+          path: |
+            out/tahoma12-gdi.json
+            out/tahoma12-gdi.png
+          if-no-files-found: error
+          retention-days: 1
