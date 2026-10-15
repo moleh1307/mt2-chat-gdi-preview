@@ -1,18 +1,18 @@
-# Normal Tahoma12 / native Windows GDI preview
+# Normal Tahoma / native Windows GDI export
 
-Isolated chat-font diagnostic. No game, save, UI layout or other font files are modified. Python standard library only; no font download, package installation, system-font changes or raw-font redistribution.
+Isolated font exporter and chat diagnostic. No game, save, UI layout or other font files are modified. Python standard library only; no font download, package installation, system-font changes or raw-font redistribution.
 
 ## Native export
 
 On Windows:
 
 ```text
-python bake_chat_gdi.py --output out
+python bake_chat_gdi.py --sizes 9,12,14 --output out
 ```
 
-The exporter refuses macOS, Linux, Wine, font substitution, unexpected metrics and unexpected Win32 structure sizes. It requests `Tahoma`, **positive lfHeight12**, weight400 (`FW_NORMAL`), non-italic, Turkish charset162, quality4 (`ANTIALIASED_QUALITY`). It uses `CreateFontIndirectW`, per-character `GetCharABCWidthsFloatW`/`GetTextExtentPoint32W`, `TextOutW` into a32-bit top-down DIB and `GdiFlush` before reading pixels. Glyph crop and `ceil(A+B+C)` advance follow the archived client's `GrpFontTexture::UpdateCharacterInfomation`; every nonzero blue byte becomes opaque white. There is no outline, stroke dilation, FreeType approximation or bitmap enlargement.
+The exporter refuses macOS, Linux, Wine, font substitution, unexpected metrics and unexpected Win32 structure sizes. It requests `Tahoma`, **positive lfHeight9/12/14**, weight400 (`FW_NORMAL`), non-italic, Turkish charset162, quality4 (`ANTIALIASED_QUALITY`). It uses `CreateFontIndirectW`, per-character `GetCharABCWidthsFloatW`/`GetTextExtentPoint32W`, `TextOutW` into a32-bit top-down DIB and `GdiFlush` before reading pixels. Glyph crop and `ceil(A+B+C)` advance follow the archived client's `GrpFontTexture::UpdateCharacterInfomation`; every nonzero blue byte becomes opaque white. There is no outline, stroke dilation, FreeType approximation or bitmap enlargement.
 
-Outputs: `tahoma12-gdi.json` and `tahoma12-gdi.png`. Metadata records Windows build, actual font metrics, selected TrueType-font SHA256 and atlas SHA256. No user name, machine name, private paths, source font file or game data is exported.
+Outputs: a `tahomaN-gdi.json` and `tahomaN-gdi.png` for each requested height. The default remains12; compare.html accepts only the original chat size12. Metadata records Windows build, actual font metrics, selected TrueType-font SHA256 and atlas SHA256. No user name, machine name, private paths, source font file or game data is exported.
 
 ## Local comparison
 
@@ -22,7 +22,7 @@ This establishes native Windows GDI output. It does **not** establish that the a
 
 ## Optional cloud export
 
-The included GitHub Actions workflow is manual-only, one `windows-2022` job with a5-minute timeout and1-day artifact retention. It runs the standard-library checks, exports only normal Tahoma12 and uploads only the two output files. It needs no project files, reference screenshot, game save, external secrets or raw font.
+The included GitHub Actions workflow is manual-only, one `windows-2022` job with a5-minute timeout and1-day artifact retention. It runs the standard-library checks, exports normal Tahoma9/12/14 and uploads only their six output files. It needs no project files, reference screenshot, game save, external secrets or raw font.
 
 It is a locally prepared proposal. Creating a remote repository, publishing these files or starting a cloud job requires the user's authorization. Standard public GitHub-hosted Windows jobs are free under GitHub's published standard-runner rules; private-repository jobs can consume the account's quota and incur charges. No remote job is started by opening this folder or preview.
 

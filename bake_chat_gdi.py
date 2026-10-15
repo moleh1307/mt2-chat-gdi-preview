@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Bake only normal Tahoma:12 using native Windows GDI; standard library only.
+"""Bake normal Tahoma:9/12/14 using native Windows GDI; standard library only.
 
 Matches the archived client's LOGFONT, per-character ABC advances, DIB crop
 and blue!=0 -> opaque white conversion. No FreeType/GDI+/canvas fallback.
@@ -39,7 +39,9 @@ def character_set():
     return sorted(set(latin + ''.join(chr(n) for n in range(0x100, 0x180)) + '→–—…'), key=ord)
 
 
-def bake():
+def bake(height=12):
+    if height not in (9, 12, 14):
+        raise ValueError('Only original locale heights 9, 12 and 14 are supported')
     if sys.platform != 'win32':
         raise RuntimeError('Native Windows GDI is required. No substitute atlas was generated.')
     from ctypes import wintypes as W
@@ -105,7 +107,7 @@ def bake():
             raise C.WinError(C.get_last_error())
         old_bitmap = select(dc, bitmap)
         lf = LOGFONTW()
-        lf.lfHeight, lf.lfWeight, lf.lfCharSet = 12, 400, 162
+        lf.lfHeight, lf.lfWeight, lf.lfCharSet = height, 400, 162
         lf.lfQuality, lf.lfFaceName = 4, 'Tahoma'
         font = font_create(C.byref(lf))
         if not font:
@@ -158,7 +160,7 @@ def bake():
             glyphs.append({'code': ord(char), 'x': x, 'y': y, 'width': width, 'height': size.cy, 'advance': advance, 'abc': [abc.a, abc.b, abc.c]})
         png = png_rgba(atlas_width, atlas_height, atlas)
         win = sys.getwindowsversion()
-        metadata = {'nativeWindowsGdi': True, 'wine': False, 'windows': {'major': win.major, 'minor': win.minor, 'build': win.build}, 'pythonBits': C.sizeof(C.c_void_p) * 8, 'requested': {'face': 'Tahoma', 'lfHeight': 12, 'lfWeight': 400, 'lfItalic': 0, 'lfCharSet': 162, 'lfQuality': 4}, 'actual': {'face': actual_face.value, 'weight': actual.weight, 'height': actual.height, 'ascent': actual.ascent, 'descent': actual.descent, 'internalLeading': actual.internalLeading, 'charSet': actual.charSet, 'dpi': caps(dc, 90)}, 'fontDataSha256': font_hash, 'glyphConversion': 'DIB blue byte != 0 -> opaque white; no outline; per-glyph ceil(A+B+C)', 'sourceAlgorithm': 'GrpFontTexture.cpp at40e2d9fef3bed9fa56a113001ae678efb72e06d3'}
+        metadata = {'nativeWindowsGdi': True, 'wine': False, 'windows': {'major': win.major, 'minor': win.minor, 'build': win.build}, 'pythonBits': C.sizeof(C.c_void_p) * 8, 'requested': {'face': 'Tahoma', 'lfHeight': height, 'lfWeight': 400, 'lfItalic': 0, 'lfCharSet': 162, 'lfQuality': 4}, 'actual': {'face': actual_face.value, 'weight': actual.weight, 'height': actual.height, 'ascent': actual.ascent, 'descent': actual.descent, 'internalLeading': actual.internalLeading, 'charSet': actual.charSet, 'dpi': caps(dc, 90)}, 'fontDataSha256': font_hash, 'glyphConversion': 'DIB blue byte != 0 -> opaque white; no outline; per-glyph ceil(A+B+C)', 'sourceAlgorithm': 'GrpFontTexture.cpp at40e2d9fef3bed9fa56a113001ae678efb72e06d3'}
         return {'schema': 'mt2-chat-gdi-v1', 'provenance': metadata, 'atlas': {'width': atlas_width, 'height': atlas_height, 'sha256': hashlib.sha256(png).hexdigest(), 'pngBase64': base64.b64encode(png).decode('ascii')}, 'glyphs': glyphs}, png
     finally:
         if old_font:
@@ -175,16 +177,21 @@ def bake():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('out'))
+    parser.add_argument('--sizes', default='12', help='Comma-separated original locale heights: 9,12,14')
     args = parser.parse_args()
     try:
-        data, png = bake()
+        sizes = [int(s) for s in args.sizes.split(',')]
+        if not sizes or len(sizes) != len(set(sizes)) or any(s not in (9, 12, 14) for s in sizes):
+            raise ValueError('Use unique heights from 9,12,14')
+        outputs = [(size, *bake(size)) for size in sizes]
     except Exception as error:
         print(str(error), file=sys.stderr)
         return 1
     args.output.mkdir(parents=True, exist_ok=True)
-    (args.output / 'tahoma12-gdi.json').write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
-    (args.output / 'tahoma12-gdi.png').write_bytes(png)
-    print(json.dumps({'face': data['provenance']['actual'], 'fontDataSha256': data['provenance']['fontDataSha256'], 'glyphCount': len(data['glyphs']), 'atlasSha256': data['atlas']['sha256']}, indent=2))
+    for size, data, png in outputs:
+        (args.output / f'tahoma{size}-gdi.json').write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
+        (args.output / f'tahoma{size}-gdi.png').write_bytes(png)
+        print(json.dumps({'face': data['provenance']['actual'], 'fontDataSha256': data['provenance']['fontDataSha256'], 'glyphCount': len(data['glyphs']), 'atlasSha256': data['atlas']['sha256']}, indent=2))
     return 0
 
 
