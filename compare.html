@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="tr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chat — normal Tahoma 12 / Windows GDI karşılaştırması</title>
+<style>
+*{box-sizing:border-box}body{margin:24px;background:#22291f;color:#eee;font:13px/1.5 Arial,sans-serif}h1{font-size:18px;font-weight:normal}p{max-width:800px;color:#c1c6bb}.controls{display:flex;gap:20px;flex-wrap:wrap;margin:20px 0}label{display:grid;gap:5px}input,button{font:inherit}main{display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap}.panel{width:380px;padding:14px;background:#394432;border:1px solid #59604e;overflow:auto}h2{margin:0 0 12px;font-size:13px;font-weight:normal}canvas,img{display:block;max-width:none}#reference[hidden],#candidate[hidden]{display:none}.inspection img,.inspection canvas{image-rendering:pixelated}#details{white-space:pre-wrap;max-width:800px;font:12px/1.5 monospace;color:#b4c8a9}#status{min-height:24px;color:#e1cba8}.note{font-size:12px}#zoom{margin:12px 0}
+</style>
+<h1>Chat fontu: referans ve gerçek Windows GDI çıktısı</h1>
+<p>Yalnızca normal Tahoma:12. Oyun, isim fontları, rakamlar, konumlar ve kayıtlar bu sayfadan değiştirilmez. Dosyalar yalnızca bu tarayıcıda okunur; ağa gönderilmez.</p>
+<div class="controls">
+ <label>Gönderdiğin referans ekran görüntüsü<input id="reference-file" type="file" accept="image/png,image/jpeg"></label>
+ <label>Windows GDI çıktısı (tahoma12-gdi.json)<input id="gdi-file" type="file" accept="application/json,.json"></label>
+</div>
+<button id="zoom" type="button" aria-pressed="false">İnceleme: 1× / 2×</button>
+<div id="status" role="status">Gerçek Windows GDI çıktısı henüz yüklenmedi. Tahmini bir font gösterilmiyor.</div>
+<main>
+ <section class="panel"><h2>Referans — kendi piksel ölçüsünde</h2><img id="reference" alt="Kullanıcının verdiği özgün chat görüntüsü" hidden></section>
+ <section class="panel"><h2>Normal Tahoma 12 — native Windows GDI, kontursuz</h2><canvas id="candidate" aria-label="Gerçek GDI glifleriyle aynı İngilizce ve Türkçe cümleler" hidden></canvas><p class="note">Glifler doğal ölçüde çizilir. Satır aralığı mevcut chat ile aynı:21px. İnceleme düğmesi iki görüntüyü birlikte2× büyütür; font boyutunu değiştirmez.</p></section>
+</main>
+<pre id="details"></pre>
+<script>
+'use strict';
+const $=id=>document.getElementById(id),hex=bytes=>[...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');
+const samples=['You have gained 11 experience points.','15 tecrübe puanı kazandın.','Kırmızı İksir(K) elde ettin.','3 Yang Kazandın.','Çığlık · Şimşek · Güç · Öfke'];
+let referenceURL=null,nativeWidth=0,nativeHeight=0,zoom=1;
+function inspect(){document.body.classList.toggle('inspection',zoom===2);const image=$('reference'),canvas=$('candidate');if(image.naturalWidth){image.style.width=image.naturalWidth*zoom+'px';image.style.height=image.naturalHeight*zoom+'px';}if(nativeWidth){canvas.style.width=nativeWidth*zoom+'px';canvas.style.height=nativeHeight*zoom+'px';}$('zoom').setAttribute('aria-pressed',String(zoom===2));}
+$('zoom').onclick=()=>{zoom=zoom===1?2:1;inspect();};
+$('reference-file').onchange=async event=>{try{const file=event.target.files[0];if(!file)return;if(!['image/png','image/jpeg'].includes(file.type)||file.size>10*1024*1024)throw Error('Küçük bir PNG/JPEG ekran görüntüsü seç.');if(referenceURL)URL.revokeObjectURL(referenceURL);referenceURL=URL.createObjectURL(file);$('reference').src=referenceURL;await $('reference').decode();$('reference').hidden=false;inspect();}catch(error){$('status').textContent=error.message;}};
+$('gdi-file').onchange=async event=>{try{
+ const file=event.target.files[0];if(!file)return;if(file.size>2*1024*1024)throw Error('GDI dosyası beklenenden büyük.');
+ const data=JSON.parse(await file.text()),p=data.provenance,a=data.atlas,r=p?.requested;
+ if(data.schema!=='mt2-chat-gdi-v1'||p?.nativeWindowsGdi!==true||p.wine!==false||r?.face!=='Tahoma'||r.lfHeight!==12||r.lfWeight!==400||r.lfItalic!==0||r.lfCharSet!==162||r.lfQuality!==4||p.actual?.face!=='Tahoma'||p.actual.weight!==400)throw Error('Bu dosya normal Tahoma12 için beklenen native Windows GDI çıktısı değil.');
+ if(!Number.isInteger(a?.width)||!Number.isInteger(a.height)||a.width<1||a.width>2048||a.height<1||a.height>2048||typeof a.pngBase64!=='string'||!/^[A-Za-z0-9+/=]+$/.test(a.pngBase64))throw Error('Geçersiz atlas.');
+ const bytes=Uint8Array.from(atob(a.pngBase64),c=>c.charCodeAt(0));if(hex(await crypto.subtle.digest('SHA-256',bytes))!==a.sha256)throw Error('Atlas SHA256 eşleşmedi.');
+ if(!Array.isArray(data.glyphs)||data.glyphs.length<128||data.glyphs.length>512)throw Error('Geçersiz glif sayısı.');
+ const glyphs=new Map();for(const g of data.glyphs){if(!['code','x','y','width','height','advance'].every(k=>Number.isInteger(g[k]))||g.code<32||g.code>65535||glyphs.has(g.code)||g.x<0||g.y<0||g.width<1||g.height<1||g.width>32||g.height>32||g.x+g.width>a.width||g.y+g.height>a.height||g.advance<0||g.advance>32)throw Error('Geçersiz glif ölçüsü.');glyphs.set(g.code,g);}
+ for(const text of samples)for(const char of text)if(!glyphs.has(char.codePointAt(0)))throw Error('Örnek cümlede eksik glif: '+char);
+ const image=new Image();image.src='data:image/png;base64,'+a.pngBase64;await image.decode();if(image.naturalWidth!==a.width||image.naturalHeight!==a.height)throw Error('PNG ölçüleri metadata ile eşleşmedi.');
+ const scratch=document.createElement('canvas');scratch.width=a.width;scratch.height=a.height;const sg=scratch.getContext('2d');sg.drawImage(image,0,0);const pixels=sg.getImageData(0,0,a.width,a.height).data;for(let i=3;i<pixels.length;i+=4)if(pixels[i]!==0&&pixels[i]!==255)throw Error('Atlas özgün DIB dönüşümü gibi binary alfa içermiyor.');
+ const width=text=>[...text].reduce((n,c)=>n+glyphs.get(c.codePointAt(0)).advance,0),canvas=$('candidate');nativeWidth=Math.max(...samples.map(width))+2;nativeHeight=(samples.length-1)*21+Math.max(...data.glyphs.map(g=>g.height))+1;canvas.width=nativeWidth;canvas.height=nativeHeight;const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
+ samples.forEach((text,row)=>{let x=0;for(const char of text){const g=glyphs.get(char.codePointAt(0));ctx.drawImage(image,g.x,g.y,g.width,g.height,x,row*21+1,g.width,g.height);x+=g.advance;}});ctx.globalCompositeOperation='source-in';ctx.fillStyle='#ffc8c8';ctx.fillRect(0,0,canvas.width,canvas.height);canvas.hidden=false;
+ $('details').textContent=JSON.stringify({backend:'Native Windows GDI',requested:p.requested,actual:p.actual,windows:p.windows,fontDataSha256:p.fontDataSha256,atlasSha256:a.sha256,englishSampleWidth:width(samples[0]),outline:false,renderScale:1},null,2);
+ $('status').textContent='GDI atlası yüklendi ve hash/ölçüler doğrulandı. Görsel eşleşme değerlendirmesi için referansla yan yana.';inspect();
+ }catch(error){$('candidate').hidden=true;$('details').textContent='';$('status').textContent=error.message;}
+};
+</script>
+</html>
