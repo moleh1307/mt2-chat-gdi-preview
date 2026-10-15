@@ -1,4 +1,4 @@
-name: Normal Tahoma12 native GDI preview
+name: Normal Tahoma native GDI fonts
 on:
   workflow_dispatch:
 permissions:
@@ -13,14 +13,14 @@ jobs:
           persist-credentials: false
       - name: Check source metric rules and export format
         run: python test_baker.py
-      - name: Bake only normal Tahoma12 through native Windows GDI
-        run: python bake_chat_gdi.py --output out
+      - name: Bake original locale heights through native Windows GDI
+        run: python bake_chat_gdi.py --sizes 9,12,14 --output out
       - name: Retain only the generated glyph atlas and metadata
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: normal-tahoma12-native-gdi
+          name: normal-tahoma-native-gdi
           path: |
-            out/tahoma12-gdi.json
-            out/tahoma12-gdi.png
+            out/tahoma*-gdi.json
+            out/tahoma*-gdi.png
           if-no-files-found: error
           retention-days: 1
